@@ -1,42 +1,57 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+/* src/App.css */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+body {
+  font-family: 'Inter', sans-serif;
+  color: #1a1a1a; /* Negro suave */
+  background-color: #f5f5f5; /* Fondo gris claro para contraste */
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.graph-container {
+  width: 100vw;
+  height: 100vh;
+  padding-top: 64px; /* Altura de la navbar */
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background-color: #4b89dc; /* Azul suave */
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
 }
 
-.card {
-  padding: 2em;
+.button:hover {
+  background-color: #3b6db0; /* Azul más oscuro */
+  transform: translateY(-1px);
 }
 
-.read-the-docs {
-  color: #888;
+.button:active {
+  transform: translateY(0);
+}
+
+.button-disabled {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background-color: #d1d5db; /* Gris claro */
+  color: #6b7280; /* Gris texto */
+  font-size: 14px;
+  font-weight: 500;
+  cursor: not-allowed;
+}
+
+.propagation-button-container {
+  position: fixed;
+  top: 300px; /* Ajustado para alinearse simétricamente con el search panel */
+  left: 70px;
+  z-index: 9;
 }
