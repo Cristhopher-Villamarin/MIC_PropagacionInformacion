@@ -47,7 +47,18 @@ export function buildGraph(linksRaw, attrsRaw, idKey = 'user_name') {
 
     if (!seen.has(src)) {
       const attrs = attrMap.get(src) || {};
-      nodes.push({ id: src, ...attrs });
+      nodes.push({
+        id: src,
+        cluster: attrs.cluster,
+        in_fear: Number(attrs.in_fear) || 0,
+        in_anger: Number(attrs.in_anger) || 0,
+        in_anticip: Number(attrs.in_anticip) || 0,
+        in_trust: Number(attrs.in_trust) || 0,
+        in_surprise: Number(attrs.in_surprise) || 0,
+        in_sadness: Number(attrs.in_sadness) || 0,
+        in_disgust: Number(attrs.in_disgust) || 0,
+        in_joy: Number(attrs.in_joy) || 0
+      });
       seen.add(src);
       if (!attrMap.has(src)) {
         console.warn(`Nodo ${src} no encontrado en atributos XLSX`);
@@ -55,7 +66,18 @@ export function buildGraph(linksRaw, attrsRaw, idKey = 'user_name') {
     }
     if (!seen.has(tgt)) {
       const attrs = attrMap.get(tgt) || {};
-      nodes.push({ id: tgt, ...attrs });
+      nodes.push({
+        id: tgt,
+        cluster: attrs.cluster,
+        in_fear: Number(attrs.in_fear) || 0,
+        in_anger: Number(attrs.in_anger) || 0,
+        in_anticip: Number(attrs.in_anticip) || 0,
+        in_trust: Number(attrs.in_trust) || 0,
+        in_surprise: Number(attrs.in_surprise) || 0,
+        in_sadness: Number(attrs.in_sadness) || 0,
+        in_disgust: Number(attrs.in_disgust) || 0,
+        in_joy: Number(attrs.in_joy) || 0
+      });
       seen.add(tgt);
       if (!attrMap.has(tgt)) {
         console.warn(`Nodo ${tgt} no encontrado en atributos XLSX`);
@@ -70,7 +92,6 @@ export function buildGraph(linksRaw, attrsRaw, idKey = 'user_name') {
       target: String(l.target).trim()
     }));
 
-  // Log para depuración
   console.log('Grafo construido:', {
     nodes: nodes.length,
     links: links.length,

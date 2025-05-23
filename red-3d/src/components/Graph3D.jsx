@@ -12,12 +12,68 @@ import SpriteText from 'three-spritetext';
  */
 function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
   const fgRef = useRef();
-  const isTransitioning = useRef(false); // Evitar transiciones simultáneas
+  const isTransitioning = useRef(false);
+
+  // Colores inspirados en Intensamente e Intensamente 2
+  const emotionColors = {
+    in_fear: '#A100A1',      // Morado (Miedo)
+    in_anger: '#FF0000',     // Rojo (Ira)
+    in_anticip: '#FF6200',   // Naranja (Anticipación)
+    in_trust: '#00CED1',     // Turquesa (Confianza)
+    in_surprise: '#FF69B4',  // Rosa (Sorpresa)
+    in_sadness: '#4682B4',   // Azul (Tristeza)
+    in_disgust: '#00FF00',   // Verde (Disgusto)
+    in_joy: '#FFFF00'        // Amarillo (Alegría)
+  };
+
+  // Crear textura de gradiente
+  const createGradientTexture = (colors, weights) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 1;
+    const context = canvas.getContext('2d');
+    const gradient = context.createLinearGradient(0, 0, canvas.width, 0);
+    let offset = 0;
+    const totalWeight = weights.reduce((sum, w) => sum + w, 0) || 1;
+    colors.forEach((color, i) => {
+      const stop = offset + (weights[i] / totalWeight);
+      gradient.addColorStop(offset, color);
+      offset = stop;
+    });
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    return new THREE.CanvasTexture(canvas);
+  };
+
+  // Obtener color del nodo (gradiente de 3 emociones)
+  const getNodeColor = (node) => {
+    const emotions = [
+      node.in_fear || 0,
+      node.in_anger || 0,
+      node.in_anticip || 0,
+      node.in_trust || 0,
+      node.in_surprise || 0,
+      node.in_sadness || 0,
+      node.in_disgust || 0,
+      node.in_joy || 0
+    ];
+    const emotionKeys = [
+      'in_fear', 'in_anger', 'in_anticip', 'in_trust',
+      'in_surprise', 'in_sadness', 'in_disgust', 'in_joy'
+    ];
+    const sortedEmotions = emotions
+      .map((val, idx) => ({ val, idx }))
+      .sort((a, b) => b.val - a.val)
+      .slice(0, 3);
+    const colors = sortedEmotions.map(e => emotionColors[emotionKeys[e.idx]]);
+    const weights = sortedEmotions.map(e => e.val);
+    return { texture: createGradientTexture(colors, weights), opacity: 0.75 };
+  };
 
   /* Centra toda la red al cargar / filtrar */
   useEffect(() => {
     if (!isTransitioning.current) {
-      fgRef.current?.zoomToFit(400, 100); // Suavizar el zoom inicial
+      fgRef.current?.zoomToFit(400, 100);
     }
   }, [data]);
 
@@ -32,48 +88,44 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
     }
 
     const focusNode = () => {
-      isTransitioning.current = true; // Bloquear nuevas transiciones
+      isTransitioning.current = true;
 
       const { x = 0, y = 0, z = 0 } = node;
       const bounds = calculateGraphBounds(data.nodes);
       const graphSize = Math.max(bounds.maxDistance, 10);
       const distance = graphSize * 1.5;
 
-      // Mover cámara suavemente
       fgRef.current.cameraPosition(
-        { x: x + distance, y: y + distance * 0.5, z }, // Ajustar posición para mejor ángulo
-        { x, y, z }, // Punto al que mirar
-        1500 // Duración más larga para suavidad (1.5 segundos)
+        { x: x + distance, y: y + distance * 0.5, z },
+        { x, y, z },
+        1500
       );
 
-      // Iluminar la esfera por 1 segundo
       node.__flashUntil = Date.now() + 9000;
       fgRef.current.refresh();
 
-      // Apagar el flash y liberar la transición
       setTimeout(() => {
         node.__flashUntil = 0;
         fgRef.current.refresh();
-        isTransitioning.current = false; // Permitir nuevas transiciones
+        isTransitioning.current = false;
       }, 9000);
     };
 
-    // Ejecutar sin pausar la física para mantener fluidez
-    setTimeout(focusNode, 100); // Breve espera para estabilidad de coordenadas
+    setTimeout(focusNode, 100);
   }, [highlightId, data.nodes]);
 
   /* Resetea la vista cuando highlightId se limpia */
   useEffect(() => {
     if (!highlightId && fgRef.current && !isTransitioning.current) {
       isTransitioning.current = true;
-      fgRef.current.zoomToFit(400, 100); // Suavizar el zoom de reset
+      fgRef.current.zoomToFit(400, 100);
       setTimeout(() => {
         isTransitioning.current = false;
-      }, 500); // Liberar después de la animación
+      }, 500);
     }
   }, [highlightId]);
 
-  /* Calcular los límites del grafo para ajustar la distancia de la cámara */
+  /* Calcular los límites del grafo */
   const calculateGraphBounds = (nodes) => {
     if (!nodes.length) return { maxDistance: 10 };
     const bounds = nodes.reduce(
@@ -102,7 +154,7 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
     return { maxDistance };
   };
 
-  /* ─────────── render ─────────── */
+  /* Render */
   return (
     <ForceGraph3D
       ref={fgRef}
@@ -111,24 +163,26 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
       linkOpacity={0.9}
       linkWidth={0.8}
       d3VelocityDecay={0.3}
-      warmupTicks={100} // Estabilizar la física al inicio
+      warmupTicks={100}
       onNodeClick={n => onNodeInfo?.(n)}
       nodeThreeObject={node => {
         const group = new THREE.Group();
         const R = 6;
 
-        const color =
-          Date.now() < (node.__flashUntil || 0)
-            ? '#ffff00'
-            : node.color || '#14c3a2';
+        const color = Date.now() < (node.__flashUntil || 0)
+          ? '#8a411d'
+          : getNodeColor(node).texture;
+
+        const material = new THREE.MeshBasicMaterial({
+          map: color instanceof THREE.Texture ? color : null,
+          color: color instanceof THREE.Texture ? null : color,
+          transparent: true,
+          opacity: getNodeColor(node).opacity
+        });
 
         const sphere = new THREE.Mesh(
           new THREE.SphereGeometry(R, 16, 16),
-          new THREE.MeshBasicMaterial({
-            color,
-            transparent: true,
-            opacity: 0.75,
-          })
+          material
         );
         group.add(sphere);
 
