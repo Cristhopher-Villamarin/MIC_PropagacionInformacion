@@ -1,10 +1,9 @@
-// src/App.jsx
 import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import SearchPanel from './components/SearchPanel';
 import PropagationModal from './components/PropagationModal';
 import NodeModal from './components/NodeModal';
-import PropagationResult from './components/PropagationResult'; // Nuevo componente
+import PropagationResult from './components/PropagationResult';
 import Graph3D from './components/Graph3D';
 import { readCsv, readXlsx, buildGraph } from './utils/loadFiles';
 import axios from 'axios';
@@ -29,6 +28,7 @@ export default function App() {
   const [isPropagationModalOpen, setIsPropagationModalOpen] = useState(false);
   const [propagationStatus, setPropagationStatus] = useState('');
   const [propagationResult, setPropagationResult] = useState(null);
+  const [highlightedLinks, setHighlightedLinks] = useState([]); // New state for animation
 
   // ────────────────────────────────────────────────────────────────
   // Lee archivos cuando el usuario los sube
@@ -122,22 +122,42 @@ export default function App() {
   // Maneja la propagación
   // ────────────────────────────────────────────────────────────────
   const handlePropagation = async () => {
-    if (!selectedUser || !message.trim()) {
-      setPropagationStatus('Por favor selecciona un usuario y escribe un mensaje.');
+    if (!selectedUser || !message.trim() || !csvFile || !xlsxFile) {
+      setPropagationStatus('Por favor selecciona un usuario, escribe un mensaje y sube ambos archivos.');
       return;
     }
     setPropagationStatus('Iniciando propagación…');
     try {
-      const response = await axios.post('http://localhost:8000/analyze_message', {
-        user_id: selectedUser,
-        message: message
+      const formData = new FormData();
+      formData.append('seed_user', selectedUser);
+      formData.append('message', message);
+      formData.append('csv_file', csvFile);
+      formData.append('xlsx_file', xlsxFile);
+      formData.append('max_steps', 4);
+
+      const response = await axios.post('http://localhost:8000/propagate', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
+
       setPropagationResult(response.data);
       setPropagationStatus('Propagación completada.');
-      
-      // Cerrar el modal y enfocar al usuario/nodo seleccionado
+
+      // Process the log to highlight links
+      const propagationLog = response.data.log || [];
+      console.log('Propagation log from backend:', propagationLog);
+      const linksToHighlight = propagationLog
+        .filter(step => step.sender && step.receiver && step.t !== undefined)
+        .map(step => ({
+          source: String(step.sender), // Convertir a string para consistencia
+          target: String(step.receiver),
+          timeStep: step.t,
+        }));
+      console.log('Generated highlightedLinks:', linksToHighlight);
+      setHighlightedLinks(linksToHighlight);
+
+      // Focus the seed user
+      setHighlightId(selectedUser);
       setIsPropagationModalOpen(false);
-      setHighlightId(selectedUser); // Enfocar el nodo en el grafo
     } catch (error) {
       setPropagationStatus(`Error: ${error.response?.data?.detail || error.message}`);
       setPropagationResult(null);
@@ -154,6 +174,7 @@ export default function App() {
     setSelectedUser('');
     setPropagationStatus('');
     setPropagationResult(null);
+    setHighlightedLinks([]);
     setIsNodeModalOpen(false);
     setIsPropagationModalOpen(false);
     setModalNode(null);
@@ -218,13 +239,14 @@ export default function App() {
       />
       <PropagationResult
         result={propagationResult}
-        onClose={() => setPropagationResult(null)} // Para cerrar el cuadro
+        onClose={() => setPropagationResult(null)}
       />
       <div className="graph-container">
         <Graph3D
           data={graphData}
           onNodeInfo={handleNodeClick}
           highlightId={highlightId}
+          highlightedLinks={highlightedLinks} // Pass highlighted links
           onResetView={handleResetView}
         />
       </div>

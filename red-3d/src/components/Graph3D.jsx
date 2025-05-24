@@ -8,11 +8,13 @@ import SpriteText from 'three-spritetext';
  * @param {Object}   props.data         { nodes, links }
  * @param {Function} props.onNodeInfo   callback al hacer click
  * @param {string}   props.highlightId  id del nodo a enfocar/colorear (opcional)
+ * @param {Array}    props.highlightedLinks  Array of { source, target, timeStep } to highlight (opcional)
  * @param {Function} props.onResetView  callback para resetear la vista (opcional)
  */
-function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
+function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onResetView }) {
   const fgRef = useRef();
   const isTransitioning = useRef(false);
+  const linkProgress = useRef({});
 
   // Colores inspirados en Intensamente e Intensamente 2
   const emotionColors = {
@@ -70,19 +72,20 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
     return { texture: createGradientTexture(colors, weights), opacity: 0.75 };
   };
 
-  /* Centra toda la red al cargar / filtrar */
+  // Centra toda la red al cargar / filtrar
   useEffect(() => {
     if (!isTransitioning.current) {
       fgRef.current?.zoomToFit(400, 100);
     }
   }, [data]);
 
-  /* Enfoca y “flashea” cuando cambia highlightId */
+  // Enfoca y “flashea” cuando cambia highlightId
   useEffect(() => {
     if (!highlightId || !fgRef.current || !data.nodes.length || isTransitioning.current) return;
 
     const node = data.nodes.find(n => n.id === highlightId);
     if (!node) {
+      console.warn('Node not found for highlightId:', highlightId);
       alert('Usuario no encontrado');
       return;
     }
@@ -114,7 +117,7 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
     setTimeout(focusNode, 100);
   }, [highlightId, data.nodes]);
 
-  /* Resetea la vista cuando highlightId se limpia */
+  // Resetea la vista cuando highlightId se limpia
   useEffect(() => {
     if (!highlightId && fgRef.current && !isTransitioning.current) {
       isTransitioning.current = true;
@@ -125,7 +128,74 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
     }
   }, [highlightId]);
 
-  /* Calcular los límites del grafo */
+  // Animar enlaces destacados
+  useEffect(() => {
+    if (!highlightedLinks.length || !fgRef.current || !data.links.length) {
+      console.log('Animation skipped:', {
+        highlightedLinksLength: highlightedLinks.length,
+        hasFgRef: !!fgRef.current,
+        linksLength: data.links.length,
+      });
+      return;
+    }
+
+    console.log('Highlighted links:', highlightedLinks);
+    console.log('Graph links:', data.links.map(l => ({ source: l.source?.id || l.source, target: l.target?.id || l.target })));
+
+    // Group links by time step
+    const steps = {};
+    highlightedLinks.forEach(link => {
+      const t = link.timeStep;
+      if (!steps[t]) steps[t] = [];
+      steps[t].push(link);
+    });
+
+    let currentTimeStep = Math.min(...Object.keys(steps).map(Number));
+    const maxTimeStep = Math.max(...Object.keys(steps).map(Number));
+
+    const animateLinks = () => {
+      if (currentTimeStep > maxTimeStep) {
+        console.log('Animation complete');
+        clearInterval(interval);
+        return;
+      }
+
+      const linksToHighlight = steps[currentTimeStep] || [];
+      console.log(`Processing time step ${currentTimeStep}:`, linksToHighlight);
+
+      let matchedLinks = 0;
+      linksToHighlight.forEach(({ source, target }) => {
+      const link = data.links.find(l => {
+        const linkSource = typeof l.source === 'object' ? l.source.id : l.source;
+        const linkTarget = typeof l.target === 'object' ? l.target.id : l.target;
+        return (linkSource === source && linkTarget === target) ||
+               (linkSource === target && linkTarget === source);
+      });
+      if (link) {
+        console.log(`Highlighting link: ${source} -> ${target}`);
+        link.__highlightUntil = Date.now() + 2000;
+        matchedLinks++;
+      } else {
+        console.warn(`Link not found: ${source} -> ${target}`);
+      }
+    });
+
+    console.log(`Matched ${matchedLinks} of ${linksToHighlight.length} links in time step ${currentTimeStep}`);
+    fgRef.current.refresh();
+    currentTimeStep++;
+    };
+
+    const interval = setInterval(animateLinks, 2500); // New step every 2.5 seconds (2s highlight + 0.5s pause)
+
+    return () => {
+      console.log('Cleaning up animation');
+      clearInterval(interval);
+      data.links.forEach(link => delete link.__highlightUntil);
+      fgRef.current.refresh();
+    };
+  }, [highlightedLinks, data.links]);
+
+  // Calcular los límites del grafo
   const calculateGraphBounds = (nodes) => {
     if (!nodes.length) return { maxDistance: 10 };
     const bounds = nodes.reduce(
@@ -154,17 +224,16 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
     return { maxDistance };
   };
 
-  /* Render */
   return (
     <ForceGraph3D
       ref={fgRef}
       graphData={data}
       backgroundColor="#111"
       linkOpacity={0.9}
-      linkWidth={0.8}
-      linkDirectionalArrowLength={5} // Add arrows to directed links
-      linkDirectionalArrowRelPos={1}   // Place arrow at the target end
-      linkDirectionalArrowColor={() => '#FFFFFF'} // White arrows for visibility
+      linkWidth={link => (Date.now() < (link.__highlightUntil || 0) ? 2 : 0.8)}
+      linkDirectionalArrowLength={5}
+      linkDirectionalArrowRelPos={1}
+      linkDirectionalArrowColor={link => (Date.now() < (link.__highlightUntil || 0) ? '#00FFFF' : '#FFFFFF')} // Fluorescent cyan
       d3VelocityDecay={0.3}
       warmupTicks={100}
       onNodeClick={n => onNodeInfo?.(n)}
