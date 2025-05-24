@@ -1,3 +1,4 @@
+// src/utils/loadFiles.js
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 
@@ -18,7 +19,21 @@ export async function readXlsx(file) {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: 'array' });
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(firstSheet);
+  const json = XLSX.utils.sheet_to_json(firstSheet);
+  
+  // Ensure emotional attributes are converted to numbers
+  return json.map(row => {
+    const emotionKeys = [
+      'subjectivity', 'polarity', 'fear', 'anger', 'anticip',
+      'trust', 'surprise', 'sadness', 'disgust', 'joy'
+    ];
+    const parsedRow = { ...row };
+    emotionKeys.forEach(key => {
+      parsedRow[`in_${key}`] = Number(row[`in_${key}`]) || 0;
+      parsedRow[`out_${key}`] = Number(row[`out_${key}`]) || 0;
+    });
+    return parsedRow;
+  });
 }
 
 // Combina enlaces + atributos → { nodes, links } para ForceGraph
@@ -45,39 +60,41 @@ export function buildGraph(linksRaw, attrsRaw, idKey = 'user_name') {
       return;
     }
 
+    const emotionKeys = [
+      'subjectivity', 'polarity', 'fear', 'anger', 'anticip',
+      'trust', 'surprise', 'sadness', 'disgust', 'joy'
+    ];
+
     if (!seen.has(src)) {
       const attrs = attrMap.get(src) || {};
-      nodes.push({
+      const node = {
         id: src,
         cluster: attrs.cluster,
-        in_fear: Number(attrs.in_fear) || 0,
-        in_anger: Number(attrs.in_anger) || 0,
-        in_anticip: Number(attrs.in_anticip) || 0,
-        in_trust: Number(attrs.in_trust) || 0,
-        in_surprise: Number(attrs.in_surprise) || 0,
-        in_sadness: Number(attrs.in_sadness) || 0,
-        in_disgust: Number(attrs.in_disgust) || 0,
-        in_joy: Number(attrs.in_joy) || 0
+      };
+      // Map all emotional attributes
+      emotionKeys.forEach(key => {
+        node[`in_${key}`] = Number(attrs[`in_${key}`]) || 0;
+        node[`out_${key}`] = Number(attrs[`out_${key}`]) || 0;
       });
+      nodes.push(node);
       seen.add(src);
       if (!attrMap.has(src)) {
         console.warn(`Nodo ${src} no encontrado en atributos XLSX`);
       }
     }
+
     if (!seen.has(tgt)) {
       const attrs = attrMap.get(tgt) || {};
-      nodes.push({
+      const node = {
         id: tgt,
         cluster: attrs.cluster,
-        in_fear: Number(attrs.in_fear) || 0,
-        in_anger: Number(attrs.in_anger) || 0,
-        in_anticip: Number(attrs.in_anticip) || 0,
-        in_trust: Number(attrs.in_trust) || 0,
-        in_surprise: Number(attrs.in_surprise) || 0,
-        in_sadness: Number(attrs.in_sadness) || 0,
-        in_disgust: Number(attrs.in_disgust) || 0,
-        in_joy: Number(attrs.in_joy) || 0
+      };
+      // Map all emotional attributes
+      emotionKeys.forEach(key => {
+        node[`in_${key}`] = Number(attrs[`in_${key}`]) || 0;
+        node[`out_${key}`] = Number(attrs[`out_${key}`]) || 0;
       });
+      nodes.push(node);
       seen.add(tgt);
       if (!attrMap.has(tgt)) {
         console.warn(`Nodo ${tgt} no encontrado en atributos XLSX`);
