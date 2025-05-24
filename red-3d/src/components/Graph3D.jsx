@@ -162,6 +162,9 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
       backgroundColor="#111"
       linkOpacity={0.9}
       linkWidth={0.8}
+      linkDirectionalArrowLength={5} // Add arrows to directed links
+      linkDirectionalArrowRelPos={1}   // Place arrow at the target end
+      linkDirectionalArrowColor={() => '#FFFFFF'} // White arrows for visibility
       d3VelocityDecay={0.3}
       warmupTicks={100}
       onNodeClick={n => onNodeInfo?.(n)}
