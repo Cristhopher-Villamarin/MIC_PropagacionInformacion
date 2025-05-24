@@ -21,7 +21,7 @@ export async function readXlsx(file) {
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
   const json = XLSX.utils.sheet_to_json(firstSheet);
   
-  // Ensure emotional attributes are converted to numbers
+  // Ensure emotional attributes are converted to numbers :)
   return json.map(row => {
     const emotionKeys = [
       'subjectivity', 'polarity', 'fear', 'anger', 'anticip',
