@@ -1,85 +1,67 @@
 # main.py
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Form, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from utils import EmotionAnalyzer
-from typing import Dict
+import pandas as pd
+
+from utils import EmotionAnalyzer, PropagationEngine
 
 app = FastAPI(
-    title="API de Análisis de Vector Emocional",
-    description="API para analizar el contenido emocional de textos",
-    version="1.0.0"
+    title="Backend · Propagación Emocional",
+    description="Endpoints de prueba para propagar mensajes en una red",
+    version="2.0.0",
 )
 
-# Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"], allow_credentials=True,
+    allow_methods=["*"], allow_headers=["*"],
 )
 
-analyzer = EmotionAnalyzer()
+analyzer = EmotionAnalyzer()        #  ⇠  /analyze
+engine   = PropagationEngine()      #  ⇠  /propagate
 
-class TextRequest(BaseModel):
-    text: str
-
-class MessageRequest(BaseModel):
-    user_id: str
-    message: str
-
-class EmotionResponse(BaseModel):
-    vector: Dict[str, float]
-    message: str = "Análisis completado exitosamente"
-
-@app.post("/analyze", response_model=EmotionResponse)
-async def analyze_text(request: TextRequest):
+# ───────────────────────── ENDPOINTS ───────────────────────────────────
+@app.post("/analyze")
+async def analyze(text: str = Form(...)):
     """
-    Analiza un texto y devuelve un vector emocional con 10 dimensiones:
-    - subjectivity: Subjetividad del texto (0.0 a 1.0)
-    - polarity: Polaridad emocional (-1.0 a 1.0)
-    - fear: Miedo (0.0 a 1.0)
-    - anger: Ira (0.0 a 1.0)
-    - anticip: Anticipación (0.0 a 1.0)
-    - trust: Confianza (0.0 a 1.0)
-    - surprise: Sorpresa (0.0 a 1.0)
-    - sadness: Tristeza (0.0 a 1.0)
-    - disgust: Disgusto (0.0 a 1.0)
-    - joy: Alegría (0.0 a 1.0)
+    Devuelve el vector emocional de un texto (10 dimensiones).
     """
     try:
-        emotion_vector = analyzer.get_emotion_vector(request.text)
         return {
-            "vector": emotion_vector,
-            "message": "Texto analizado exitosamente"
+            "vector": analyzer.as_dict(text),
+            "message": "Texto analizado correctamente",
         }
     except Exception as e:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Error al analizar el texto: {str(e)}"
-        )
+        raise HTTPException(500, str(e))
 
-@app.post("/analyze_message", response_model=EmotionResponse)
-async def analyze_message(request: MessageRequest):
+@app.post("/propagate")
+async def propagate(
+    seed_user: str         = Form(..., description="Usuario origen"),
+    message:   str         = Form(..., description="Mensaje a propagar"),
+    csv_file:  UploadFile  = File(..., description="CSV con aristas"),
+    xlsx_file: UploadFile  = File(..., description="Excel con estados"),
+    max_steps: int         = Form(4, ge=1, le=10)
+):
     """
-    Analiza un mensaje asociado a un usuario y devuelve su vector emocional.
+    Sube los archivos, construye la red y simula la cascada.
     """
     try:
-        emotion_vector = analyzer.get_emotion_vector(request.message)
+        edges_df  = pd.read_csv(csv_file.file)
+        states_df = pd.read_excel(xlsx_file.file)
+        engine.build(edges_df, states_df)               # red lista
+
+        vector, log = engine.propagate(seed_user, message, max_steps)
         return {
-            "vector": emotion_vector,
-            "message": f"Mensaje para el usuario {request.user_id} analizado exitosamente"
+            "vector": vector,
+            "log":    log,
+            "message": "Propagación ejecutada correctamente",
         }
     except Exception as e:
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Error al analizar el mensaje: {str(e)}"
-        )
+        raise HTTPException(500, str(e))
 
 @app.get("/health")
-async def health_check():
-    return {"status": "saludable"}
+async def health():
+    return {"status": "ok"}
 
 if __name__ == "__main__":
     import uvicorn
