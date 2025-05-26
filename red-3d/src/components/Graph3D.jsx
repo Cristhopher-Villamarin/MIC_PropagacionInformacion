@@ -160,8 +160,8 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
       ref={fgRef}
       graphData={data}
       backgroundColor="#111"
-      linkOpacity={0.9}
-      linkWidth={0.8}
+      linkOpacity={0.45}
+      linkWidth={0.9}
       linkDirectionalArrowLength={5} // Add arrows to directed links
       linkDirectionalArrowRelPos={1}   // Place arrow at the target end
       linkDirectionalArrowColor={() => '#FFFFFF'} // White arrows for visibility
