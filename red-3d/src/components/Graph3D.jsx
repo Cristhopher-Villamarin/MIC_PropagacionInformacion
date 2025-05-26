@@ -9,8 +9,9 @@ import SpriteText from 'three-spritetext';
  * @param {Function} props.onNodeInfo   callback al hacer click
  * @param {string}   props.highlightId  id del nodo a enfocar/colorear (opcional)
  * @param {Function} props.onResetView  callback para resetear la vista (opcional)
+ * @param {Array}    props.highlightedLinks  links to highlight with animation
  */
-function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
+function Graph3D({ data, onNodeInfo, highlightId, onResetView, highlightedLinks }) {
   const fgRef = useRef();
   const isTransitioning = useRef(false);
 
@@ -70,14 +71,14 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
     return { texture: createGradientTexture(colors, weights), opacity: 0.75 };
   };
 
-  /* Centra toda la red al cargar / filtrar */
+  // Centra toda la red al cargar / filtrar
   useEffect(() => {
     if (!isTransitioning.current) {
       fgRef.current?.zoomToFit(400, 100);
     }
   }, [data]);
 
-  /* Enfoca y “flashea” cuando cambia highlightId */
+  // Enfoca y “flashea” cuando cambia highlightId
   useEffect(() => {
     if (!highlightId || !fgRef.current || !data.nodes.length || isTransitioning.current) return;
 
@@ -114,7 +115,7 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
     setTimeout(focusNode, 100);
   }, [highlightId, data.nodes]);
 
-  /* Resetea la vista cuando highlightId se limpia */
+  // Resetea la vista cuando highlightId se limpia
   useEffect(() => {
     if (!highlightId && fgRef.current && !isTransitioning.current) {
       isTransitioning.current = true;
@@ -125,7 +126,7 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
     }
   }, [highlightId]);
 
-  /* Calcular los límites del grafo */
+  // Calcular los límites del grafo
   const calculateGraphBounds = (nodes) => {
     if (!nodes.length) return { maxDistance: 10 };
     const bounds = nodes.reduce(
@@ -154,17 +155,50 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView }) {
     return { maxDistance };
   };
 
-  /* Render */
+  // Animación de enlaces
+  useEffect(() => {
+    if (!fgRef.current || !highlightedLinks.length || !data.links.length) return;
+
+    const animateLinks = () => {
+      highlightedLinks.forEach((highlight, index) => {
+        const linkObj = data.links.find(
+          l => (l.source.id === highlight.source || l.source === highlight.source) &&
+               (l.target.id === highlight.target || l.target === highlight.target)
+        );
+        if (linkObj) {
+          linkObj.__highlightUntil = Date.now() + (highlight.animationDelay || 0) + 2000; // 2s por enlace
+          linkObj.__isHighlighted = true; // Marca para asegurar que la flecha se renderice
+        }
+      });
+      fgRef.current.refresh();
+    };
+
+    const timer = setTimeout(animateLinks, 100);
+
+    return () => clearTimeout(timer);
+  }, [highlightedLinks, data.links]);
+
+  // Render
   return (
     <ForceGraph3D
       ref={fgRef}
       graphData={data}
       backgroundColor="#111"
       linkOpacity={0.45}
-      linkWidth={0.9}
-      linkDirectionalArrowLength={5} // Add arrows to directed links
-      linkDirectionalArrowRelPos={1}   // Place arrow at the target end
-      linkDirectionalArrowColor={() => '#FFFFFF'} // White arrows for visibility
+      linkWidth={link => {
+        return link.__isHighlighted && Date.now() < (link.__highlightUntil || 0) ? 3 : 0.9;
+      }}
+      linkColor={link => {
+        return link.__isHighlighted && Date.now() < (link.__highlightUntil || 0) ? '#00FF00' : '#FFFFFF';
+      }}
+      linkDirectionalArrowLength={link => {
+        return link.__isHighlighted && Date.now() < (link.__highlightUntil || 0) ? 10 : 5;
+      }}
+      linkDirectionalArrowRelPos={1}
+      linkDirectionalArrowColor={link => {
+        return link.__isHighlighted && Date.now() < (link.__highlightUntil || 0) ? '#00FF00' : '#FFFFFF';
+      }}
+      linkDirectionalArrowResolution={16} // Mayor resolución para flechas más nítidas
       d3VelocityDecay={0.3}
       warmupTicks={100}
       onNodeClick={n => onNodeInfo?.(n)}

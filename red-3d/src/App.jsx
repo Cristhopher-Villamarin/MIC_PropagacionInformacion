@@ -28,11 +28,10 @@ export default function App() {
   const [isPropagationModalOpen, setIsPropagationModalOpen] = useState(false);
   const [propagationStatus, setPropagationStatus] = useState('');
   const [propagationResult, setPropagationResult] = useState(null);
-  const [highlightedLinks, setHighlightedLinks] = useState([]); // New state for animation
+  const [highlightedLinks, setHighlightedLinks] = useState([]);
+  const [propagationLog, setPropagationLog] = useState([]);
 
-  // ────────────────────────────────────────────────────────────────
   // Lee archivos cuando el usuario los sube
-  // ────────────────────────────────────────────────────────────────
   useEffect(() => {
     async function loadCsv() {
       if (!csvFile) return;
@@ -60,9 +59,7 @@ export default function App() {
     loadXlsx();
   }, [xlsxFile]);
 
-  // ────────────────────────────────────────────────────────────────
   // Construye el grafo cuando cambian selectedNet, linksAll o attrsAll
-  // ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!selectedNet || linksAll.length === 0 || attrsAll.length === 0) {
       return;
@@ -80,9 +77,7 @@ export default function App() {
     setHighlightId('');
   }, [selectedNet, linksAll, attrsAll]);
 
-  // ────────────────────────────────────────────────────────────────
   // Maneja el clic en un nodo para abrir el modal de información
-  // ────────────────────────────────────────────────────────────────
   const handleNodeClick = (node) => {
     const emotional_vector_in = {
       subjectivity: node.in_subjectivity ?? 'N/A',
@@ -118,9 +113,7 @@ export default function App() {
     setSelectedNode(node);
   };
 
-  // ────────────────────────────────────────────────────────────────
   // Maneja la propagación
-  // ────────────────────────────────────────────────────────────────
   const handlePropagation = async () => {
     if (!selectedUser || !message.trim() || !csvFile || !xlsxFile) {
       setPropagationStatus('Por favor selecciona un usuario, escribe un mensaje y sube ambos archivos.');
@@ -142,15 +135,19 @@ export default function App() {
       setPropagationResult(response.data);
       setPropagationStatus('Propagación completada.');
 
-      // Process the log to highlight links
+      // Store the full propagation log
       const propagationLog = response.data.log || [];
+      setPropagationLog(propagationLog);
       console.log('Propagation log from backend:', propagationLog);
+
+      // Process the log to highlight links with animation delays
       const linksToHighlight = propagationLog
         .filter(step => step.sender && step.receiver && step.t !== undefined)
-        .map(step => ({
-          source: String(step.sender), // Convertir a string para consistencia
-          target: String(step.receiver),
+        .map((step, index) => ({
+          source: String(step.sender), // ID del nodo emisor
+          target: String(step.receiver), // ID del nodo receptor
           timeStep: step.t,
+          animationDelay: index * 2500, // 2.5s delay between each link
         }));
       console.log('Generated highlightedLinks:', linksToHighlight);
       setHighlightedLinks(linksToHighlight);
@@ -164,9 +161,7 @@ export default function App() {
     }
   };
 
-  // ────────────────────────────────────────────────────────────────
   // Función para resetear la vista
-  // ────────────────────────────────────────────────────────────────
   const handleResetView = () => {
     setHighlightId('');
     setSearchText('');
@@ -175,6 +170,7 @@ export default function App() {
     setPropagationStatus('');
     setPropagationResult(null);
     setHighlightedLinks([]);
+    setPropagationLog([]);
     setIsNodeModalOpen(false);
     setIsPropagationModalOpen(false);
     setModalNode(null);
@@ -236,6 +232,7 @@ export default function App() {
         isOpen={isNodeModalOpen}
         setIsOpen={setIsNodeModalOpen}
         modalNode={modalNode}
+        propagationLog={propagationLog}
       />
       <PropagationResult
         result={propagationResult}
@@ -246,7 +243,7 @@ export default function App() {
           data={graphData}
           onNodeInfo={handleNodeClick}
           highlightId={highlightId}
-          highlightedLinks={highlightedLinks} // Pass highlighted links
+          highlightedLinks={highlightedLinks}
           onResetView={handleResetView}
         />
       </div>
