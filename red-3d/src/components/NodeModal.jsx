@@ -55,7 +55,7 @@ export default function NodeModal({ isOpen, setIsOpen, modalNode, propagationLog
             {nodeHistory.map((entry, index) => (
               <div key={index} className="modal-history-entry">
                 <h5 className="modal-history-header">
-                  Paso {entry.timeStep} (Estado del nodo de acuerdo con la interacción con {entry.sender})
+                  Paso {entry.timeStep} (Estado del nodo despues de  la interacción con {entry.sender})
                 </h5>
                 <div className="modal-history-states">
                   <div className="modal-history-state">
