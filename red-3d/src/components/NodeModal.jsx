@@ -15,7 +15,7 @@ export default function NodeModal({ isOpen, setIsOpen, modalNode, propagationLog
       state_in_after: entry.state_in_after,
     }));
 
-  // Map emotional indices to names for display
+  // Mapeo emocional
   const emotionKeys = [
     'subjectivity', 'polarity', 'fear', 'anger', 'anticipation',
     'trust', 'surprise', 'sadness', 'disgust', 'joy'
