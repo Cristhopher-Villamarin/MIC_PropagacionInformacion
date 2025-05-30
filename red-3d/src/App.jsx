@@ -31,7 +31,7 @@ export default function App() {
   const [highlightedLinks, setHighlightedLinks] = useState([]);
   const [propagationLog, setPropagationLog] = useState([]);
 
-  // Lee archivos cuando el usuario los sube
+  // Lee archivos CSV
   useEffect(() => {
     async function loadCsv() {
       if (!csvFile) return;
@@ -48,6 +48,7 @@ export default function App() {
     loadCsv();
   }, [csvFile]);
 
+  // Lee archivos XLSX
   useEffect(() => {
     async function loadXlsx() {
       if (!xlsxFile) return;
@@ -59,7 +60,7 @@ export default function App() {
     loadXlsx();
   }, [xlsxFile]);
 
-  // Construye el grafo cuando cambian selectedNet, linksAll o attrsAll
+  // Construye el grafo
   useEffect(() => {
     if (!selectedNet || linksAll.length === 0 || attrsAll.length === 0) {
       return;
@@ -69,6 +70,7 @@ export default function App() {
       l => String(l.network_id ?? l.networkId) === selectedNet
     );
     const data = buildGraph(linksFiltered, attrsAll);
+    console.log('graphData.links generados:', data.links);
     setGraphData(data);
     setStatus(
       `Red ${selectedNet}: ${data.nodes.length} nodos · ${data.links.length} enlaces`
@@ -77,7 +79,7 @@ export default function App() {
     setHighlightId('');
   }, [selectedNet, linksAll, attrsAll]);
 
-  // Maneja el clic en un nodo para abrir el modal de información
+  // Maneja el clic en un nodo
   const handleNodeClick = (node) => {
     const emotional_vector_in = {
       subjectivity: node.in_subjectivity ?? 'N/A',
@@ -135,33 +137,39 @@ export default function App() {
       setPropagationResult(response.data);
       setPropagationStatus('Propagación completada.');
 
-      // Store the full propagation log
+      // Store the propagation log
       const propagationLog = response.data.log || [];
-      setPropagationLog(propagationLog);
       console.log('Propagation log from backend:', propagationLog);
+      setPropagationLog(propagationLog);
 
-      // Process the log to highlight links with animation delays
+      // Generate highlightedLinks
       const linksToHighlight = propagationLog
-        .filter(step => step.sender && step.receiver && step.t !== undefined)
-        .map((step, index) => ({
-          source: String(step.sender), // ID del nodo emisor
-          target: String(step.receiver), // ID del nodo receptor
-          timeStep: step.t,
-          animationDelay: index * 2500, // 2.5s delay between each link
-        }));
-      console.log('Generated highlightedLinks:', linksToHighlight);
+        .filter(entry => entry.sender && entry.receiver && entry.t !== undefined)
+        .sort((a, b) => a.t - b.t)
+        .map((entry, index) => {
+          const link = {
+            source: String(entry.sender),
+            target: String(entry.receiver),
+            timeStep: entry.t,
+            animationDelay: index * 4000 // 4s por enlace
+          };
+          console.log(`Generated link [${index}]:`, link);
+          return link;
+        });
+      console.log('Total highlightedLinks:', linksToHighlight);
       setHighlightedLinks(linksToHighlight);
 
-      // Focus the seed user
+      // Enfocar al usuario inicial
       setHighlightId(selectedUser);
       setIsPropagationModalOpen(false);
     } catch (error) {
+      console.error('Propagation error:', error);
       setPropagationStatus(`Error: ${error.response?.data?.detail || error.message}`);
       setPropagationResult(null);
     }
   };
 
-  // Función para resetear la vista
+  // Resetear la vista
   const handleResetView = () => {
     setHighlightId('');
     setSearchText('');
@@ -210,7 +218,7 @@ export default function App() {
           <li style={{ color: '#FFFF00' }}>Amarillo: Alegría</li>
           <li style={{ color: '#FF0000' }}>Rojo: Ira</li>
           <li style={{ color: '#4682B4' }}>Azul: Tristeza</li>
-          <li style={{ color: '#00FF00' }}>Verde: Disgusto</li>
+          <li style={{ color: '#aaff00' }}>Verde claro: Disgusto</li>
           <li style={{ color: '#A100A1' }}>Morado: Miedo</li>
           <li style={{ color: '#FF6200' }}>Naranja: Anticipación</li>
           <li style={{ color: '#00CED1' }}>Turquesa: Confianza</li>
