@@ -1,10 +1,9 @@
-// src/App.jsx
 import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import SearchPanel from './components/SearchPanel';
 import PropagationModal from './components/PropagationModal';
 import NodeModal from './components/NodeModal';
-import PropagationResult from './components/PropagationResult'; // Nuevo componente
+import PropagationResult from './components/PropagationResult';
 import Graph3D from './components/Graph3D';
 import { readCsv, readXlsx, buildGraph } from './utils/loadFiles';
 import axios from 'axios';
@@ -29,10 +28,10 @@ export default function App() {
   const [isPropagationModalOpen, setIsPropagationModalOpen] = useState(false);
   const [propagationStatus, setPropagationStatus] = useState('');
   const [propagationResult, setPropagationResult] = useState(null);
+  const [highlightedLinks, setHighlightedLinks] = useState([]);
+  const [propagationLog, setPropagationLog] = useState([]);
 
-  // ────────────────────────────────────────────────────────────────
-  // Lee archivos cuando el usuario los sube
-  // ────────────────────────────────────────────────────────────────
+  // Lee archivos CSV
   useEffect(() => {
     async function loadCsv() {
       if (!csvFile) return;
@@ -49,6 +48,7 @@ export default function App() {
     loadCsv();
   }, [csvFile]);
 
+  // Lee archivos XLSX
   useEffect(() => {
     async function loadXlsx() {
       if (!xlsxFile) return;
@@ -60,9 +60,7 @@ export default function App() {
     loadXlsx();
   }, [xlsxFile]);
 
-  // ────────────────────────────────────────────────────────────────
-  // Construye el grafo cuando cambian selectedNet, linksAll o attrsAll
-  // ────────────────────────────────────────────────────────────────
+  // Construye el grafo
   useEffect(() => {
     if (!selectedNet || linksAll.length === 0 || attrsAll.length === 0) {
       return;
@@ -72,6 +70,7 @@ export default function App() {
       l => String(l.network_id ?? l.networkId) === selectedNet
     );
     const data = buildGraph(linksFiltered, attrsAll);
+    console.log('graphData.links generados:', data.links);
     setGraphData(data);
     setStatus(
       `Red ${selectedNet}: ${data.nodes.length} nodos · ${data.links.length} enlaces`
@@ -80,9 +79,7 @@ export default function App() {
     setHighlightId('');
   }, [selectedNet, linksAll, attrsAll]);
 
-  // ────────────────────────────────────────────────────────────────
-  // Maneja el clic en un nodo para abrir el modal de información
-  // ────────────────────────────────────────────────────────────────
+  // Maneja el clic en un nodo
   const handleNodeClick = (node) => {
     const emotional_vector_in = {
       subjectivity: node.in_subjectivity ?? 'N/A',
@@ -118,35 +115,61 @@ export default function App() {
     setSelectedNode(node);
   };
 
-  // ────────────────────────────────────────────────────────────────
   // Maneja la propagación
-  // ────────────────────────────────────────────────────────────────
   const handlePropagation = async () => {
-    if (!selectedUser || !message.trim()) {
-      setPropagationStatus('Por favor selecciona un usuario y escribe un mensaje.');
+    if (!selectedUser || !message.trim() || !csvFile || !xlsxFile) {
+      setPropagationStatus('Por favor selecciona un usuario, escribe un mensaje y sube ambos archivos.');
       return;
     }
     setPropagationStatus('Iniciando propagación…');
     try {
-      const response = await axios.post('http://localhost:8000/analyze_message', {
-        user_id: selectedUser,
-        message: message
+      const formData = new FormData();
+      formData.append('seed_user', selectedUser);
+      formData.append('message', message);
+      formData.append('csv_file', csvFile);
+      formData.append('xlsx_file', xlsxFile);
+      formData.append('max_steps', 4);
+
+      const response = await axios.post('http://localhost:8000/propagate', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
+
       setPropagationResult(response.data);
       setPropagationStatus('Propagación completada.');
-      
-      // Cerrar el modal y enfocar al usuario/nodo seleccionado
+
+      // Store the propagation log
+      const propagationLog = response.data.log || [];
+      console.log('Propagation log from backend:', propagationLog);
+      setPropagationLog(propagationLog);
+
+      // Generate highlightedLinks
+      const linksToHighlight = propagationLog
+        .filter(entry => entry.sender && entry.receiver && entry.t !== undefined)
+        .sort((a, b) => a.t - b.t)
+        .map((entry, index) => {
+          const link = {
+            source: String(entry.sender),
+            target: String(entry.receiver),
+            timeStep: entry.t,
+            animationDelay: index * 4000 // 4s por enlace
+          };
+          console.log(`Generated link [${index}]:`, link);
+          return link;
+        });
+      console.log('Total highlightedLinks:', linksToHighlight);
+      setHighlightedLinks(linksToHighlight);
+
+      // Enfocar al usuario inicial
+      setHighlightId(selectedUser);
       setIsPropagationModalOpen(false);
-      setHighlightId(selectedUser); // Enfocar el nodo en el grafo
     } catch (error) {
+      console.error('Propagation error:', error);
       setPropagationStatus(`Error: ${error.response?.data?.detail || error.message}`);
       setPropagationResult(null);
     }
   };
 
-  // ────────────────────────────────────────────────────────────────
-  // Función para resetear la vista
-  // ────────────────────────────────────────────────────────────────
+  // Resetear la vista
   const handleResetView = () => {
     setHighlightId('');
     setSearchText('');
@@ -154,6 +177,8 @@ export default function App() {
     setSelectedUser('');
     setPropagationStatus('');
     setPropagationResult(null);
+    setHighlightedLinks([]);
+    setPropagationLog([]);
     setIsNodeModalOpen(false);
     setIsPropagationModalOpen(false);
     setModalNode(null);
@@ -193,7 +218,7 @@ export default function App() {
           <li style={{ color: '#FFFF00' }}>Amarillo: Alegría</li>
           <li style={{ color: '#FF0000' }}>Rojo: Ira</li>
           <li style={{ color: '#4682B4' }}>Azul: Tristeza</li>
-          <li style={{ color: '#00FF00' }}>Verde: Disgusto</li>
+          <li style={{ color: '#aaff00' }}>Verde claro: Disgusto</li>
           <li style={{ color: '#A100A1' }}>Morado: Miedo</li>
           <li style={{ color: '#FF6200' }}>Naranja: Anticipación</li>
           <li style={{ color: '#00CED1' }}>Turquesa: Confianza</li>
@@ -215,16 +240,18 @@ export default function App() {
         isOpen={isNodeModalOpen}
         setIsOpen={setIsNodeModalOpen}
         modalNode={modalNode}
+        propagationLog={propagationLog}
       />
       <PropagationResult
         result={propagationResult}
-        onClose={() => setPropagationResult(null)} // Para cerrar el cuadro
+        onClose={() => setPropagationResult(null)}
       />
       <div className="graph-container">
         <Graph3D
           data={graphData}
           onNodeInfo={handleNodeClick}
           highlightId={highlightId}
+          highlightedLinks={highlightedLinks}
           onResetView={handleResetView}
         />
       </div>
