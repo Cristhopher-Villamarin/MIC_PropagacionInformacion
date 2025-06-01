@@ -521,7 +521,7 @@ function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onReset
         } else if (link.__isPermanentlyHighlighted) {
           return '#aaff00'; // Verde fosforescente permanente
         }
-        return '#dedbda'; // Blanco normal
+        return '#828282'; // Blanco normal
       }}
       // Configuración de flechas
       linkDirectionalArrowLength={5}
