@@ -1,3 +1,4 @@
+// src/components/Graph3D.jsx
 import { useEffect, useRef, memo, useMemo, useCallback } from 'react';
 import ForceGraph3D from 'react-force-graph-3d';
 import * as THREE from 'three';
@@ -8,7 +9,7 @@ import SpriteText from 'three-spritetext';
  * @param {Object}   props.data         { nodes, links }
  * @param {Function} props.onNodeInfo   callback al hacer click
  * @param {string}   props.highlightId  id del nodo a enfocar/colorear (opcional)
- * @param {Array}    props.highlightedLinks  Array of { source, target, timeStep } to highlight (opcional)
+ * @param {Array}    props.highlightedLinks  Array of { source, target, timeStep, vector } to highlight (opcional)
  * @param {Function} props.onResetView  callback para resetear la vista (opcional)
  */
 function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onResetView }) {
@@ -39,8 +40,8 @@ function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onReset
   const getAnimationConfig = useCallback(() => {
     if (isExtensivePropagation) {
       return {
-        ANIMATION_DELAY: 150, // Más lento para ver la secuencia
-        ANIMATION_DURATION: 400,
+        ANIMATION_DELAY: 4000, // Más lento para ver la secuencia
+        ANIMATION_DURATION: 4000,
         BATCH_SIZE: 1, // Un enlace a la vez
         VISIBILITY_DURATION: 800,
         REFRESH_THROTTLE: 50 // Throttle más agresivo
@@ -103,13 +104,11 @@ function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onReset
       involvedNodeIds.has(String(node.id))
     );
 
-    const filteredLinksArray = Array.from(involvedLinks);
-
     console.log(`Modo propagación activado:`, {
       totalNodes: data.nodes.length,
       filteredNodes: filteredNodes.length,
       totalLinks: data.links.length,
-      filteredLinks: filteredLinksArray.length,
+      filteredLinks: Array.from(involvedLinks).length,
       highlightedLinks: highlightedLinks.length,
       isLarge: isLargePropagation,
       isExtensive: isExtensivePropagation
@@ -117,7 +116,7 @@ function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onReset
 
     return {
       nodes: filteredNodes,
-      links: filteredLinksArray
+      links: Array.from(involvedLinks)
     };
   }, [data, highlightedLinks, isInPropagationMode, isLargePropagation, isExtensivePropagation]);
 
@@ -195,7 +194,7 @@ function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onReset
     const weights = sortedEmotions.map(e => e.val);
     
     return { texture: createGradientTexture(colors, weights), opacity: 0.8 };
-  }, [createGradientTexture, emotionColors]);
+  }, [createGradientTexture]);
 
   // Función de refresh throttled para mejor rendimiento
   const throttledRefresh = useCallback(() => {
@@ -346,8 +345,16 @@ function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onReset
       link.__isCurrentlyAnimating = false;
     }
 
+    // Restaurar estados emocionales originales de los nodos
+    filteredData.nodes.forEach(node => {
+      if (node.original_emotions) {
+        Object.assign(node, node.original_emotions);
+        delete node.original_emotions;
+      }
+    });
+
     throttledRefresh();
-  }, [filteredData.links, clearAllTimeouts, throttledRefresh]);
+  }, [filteredData.nodes, filteredData.links, clearAllTimeouts, throttledRefresh]);
 
   // Animación secuencial optimizada (UNO POR UNO)
   useEffect(() => {
@@ -372,6 +379,20 @@ function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onReset
       link.__isPermanentlyHighlighted = false;
       link.__isCurrentlyAnimating = false;
     }
+
+    // Guardar estados emocionales originales
+    filteredData.nodes.forEach(node => {
+      node.original_emotions = {
+        in_fear: node.in_fear,
+        in_anger: node.in_anger,
+        in_anticip: node.in_anticip,
+        in_trust: node.in_trust,
+        in_surprise: node.in_surprise,
+        in_sadness: node.in_sadness,
+        in_disgust: node.in_disgust,
+        in_joy: node.in_joy
+      };
+    });
 
     // Crear un mapa de enlaces para búsqueda O(1)
     const linkMap = new Map();
@@ -416,7 +437,23 @@ function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onReset
         if (linkObj) {
           linkObj.__isCurrentlyAnimating = false;
           linkObj.__isPermanentlyHighlighted = true;
-          
+
+          // Actualizar el estado emocional del nodo receptor DESPUÉS de que el enlace se pinta de verde
+          const targetNode = filteredData.nodes.find(n => String(n.id) === targetId);
+          if (targetNode && highlight.vector) {
+            const emotionKeys = [
+              'in_subjectivity', 'in_polarity', 'in_fear', 'in_anger',
+              'in_anticip', 'in_trust', 'in_surprise', 'in_sadness',
+              'in_disgust', 'in_joy'
+            ];
+            emotionKeys.forEach((key, idx) => {
+              if (highlight.vector[idx] !== undefined) {
+                targetNode[key] = highlight.vector[idx];
+              }
+            });
+            console.log(`Actualizado estado emocional del nodo ${targetId} después de animación:`, targetNode);
+          }
+
           throttledRefresh();
         }
         animationTimeoutRefs.current.delete(animationEndTimeout);
@@ -449,7 +486,7 @@ function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onReset
     return () => {
       cleanupAnimation();
     };
-  }, [highlightedLinks, filteredData.links, isExtensivePropagation, isLargePropagation, 
+  }, [highlightedLinks, filteredData.nodes, filteredData.links, isExtensivePropagation, isLargePropagation, 
       cleanupAnimation, getAnimationConfig, throttledRefresh]);
 
   // Cleanup al desmontar

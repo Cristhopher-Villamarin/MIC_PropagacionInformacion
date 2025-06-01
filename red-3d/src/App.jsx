@@ -1,3 +1,4 @@
+// src/components/App.jsx
 import { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import SearchPanel from './components/SearchPanel';
@@ -81,18 +82,39 @@ export default function App() {
 
   // Maneja el clic en un nodo
   const handleNodeClick = (node) => {
-    const emotional_vector_in = {
-      subjectivity: node.in_subjectivity ?? 'N/A',
-      polarity: node.in_polarity ?? 'N/A',
-      fear: node.in_fear ?? 'N/A',
-      anger: node.in_anger ?? 'N/A',
-      anticipation: node.in_anticip ?? 'N/A',
-      trust: node.in_trust ?? 'N/A',
-      surprise: node.in_surprise ?? 'N/A',
-      sadness: node.in_sadness ?? 'N/A',
-      disgust: node.in_disgust ?? 'N/A',
-      joy: node.in_joy ?? 'N/A',
-    };
+    // Buscar el último estado emocional del nodo en propagationLog
+    const nodeHistory = propagationLog
+      .filter(entry => entry.receiver === node.id)
+      .sort((a, b) => b.t - a.t); // Ordenar por timeStep descendente
+
+    const latestState = nodeHistory.length > 0 ? nodeHistory[0].state_in_after : null;
+
+    const emotional_vector_in = latestState
+      ? {
+          subjectivity: latestState[0] ?? 'N/A',
+          polarity: latestState[1] ?? 'N/A',
+          fear: latestState[2] ?? 'N/A',
+          anger: latestState[3] ?? 'N/A',
+          anticipation: latestState[4] ?? 'N/A',
+          trust: latestState[5] ?? 'N/A',
+          surprise: latestState[6] ?? 'N/A',
+          sadness: latestState[7] ?? 'N/A',
+          disgust: latestState[8] ?? 'N/A',
+          joy: latestState[9] ?? 'N/A',
+        }
+      : {
+          subjectivity: node.in_subjectivity ?? 'N/A',
+          polarity: node.in_polarity ?? 'N/A',
+          fear: node.in_fear ?? 'N/A',
+          anger: node.in_anger ?? 'N/A',
+          anticipation: node.in_anticip ?? 'N/A',
+          trust: node.in_trust ?? 'N/A',
+          surprise: node.in_surprise ?? 'N/A',
+          sadness: node.in_sadness ?? 'N/A',
+          disgust: node.in_disgust ?? 'N/A',
+          joy: node.in_joy ?? 'N/A',
+        };
+
     const emotional_vector_out = {
       subjectivity: node.out_subjectivity ?? 'N/A',
       polarity: node.out_polarity ?? 'N/A',
@@ -105,6 +127,7 @@ export default function App() {
       disgust: node.out_disgust ?? 'N/A',
       joy: node.out_joy ?? 'N/A',
     };
+
     const nodeWithVectors = {
       ...node,
       emotional_vector_in,
@@ -142,7 +165,7 @@ export default function App() {
       console.log('Propagation log from backend:', propagationLog);
       setPropagationLog(propagationLog);
 
-      // Generate highlightedLinks
+      // Generate highlightedLinks with emotional vector
       const linksToHighlight = propagationLog
         .filter(entry => entry.sender && entry.receiver && entry.t !== undefined)
         .sort((a, b) => a.t - b.t)
@@ -151,7 +174,8 @@ export default function App() {
             source: String(entry.sender),
             target: String(entry.receiver),
             timeStep: entry.t,
-            animationDelay: index * 4000 // 4s por enlace
+            animationDelay: index * 4000, // 4s por enlace
+            vector: entry.state_in_after // Incluir el vector emocional del receptor
           };
           console.log(`Generated link [${index}]:`, link);
           return link;
@@ -218,7 +242,7 @@ export default function App() {
           <li style={{ color: '#FFFF00' }}>Amarillo: Alegría</li>
           <li style={{ color: '#FF0000' }}>Rojo: Ira</li>
           <li style={{ color: '#4682B4' }}>Azul: Tristeza</li>
-          <li style={{ color: '#aaff00' }}>Verde claro: Disgusto</li>
+          <li style={{ color: '#00FF00' }}>Verde claro: Disgusto</li>
           <li style={{ color: '#A100A1' }}>Morado: Miedo</li>
           <li style={{ color: '#FF6200' }}>Naranja: Anticipación</li>
           <li style={{ color: '#00CED1' }}>Turquesa: Confianza</li>
