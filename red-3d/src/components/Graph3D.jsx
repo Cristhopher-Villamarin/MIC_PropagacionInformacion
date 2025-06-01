@@ -8,10 +8,10 @@ import SpriteText from 'three-spritetext';
  * @param {Object}   props.data         { nodes, links }
  * @param {Function} props.onNodeInfo   callback al hacer click
  * @param {string}   props.highlightId  id del nodo a enfocar/colorear (opcional)
- * @param {Function} props.onResetView  callback para resetear
- * @param {Array}    props.highlightedLinks  links to highlight with animation
+ * @param {Array}    props.highlightedLinks  Array of { source, target, timeStep } to highlight (opcional)
+ * @param {Function} props.onResetView  callback para resetear la vista (opcional)
  */
-function Graph3D({ data, onNodeInfo, highlightId, onResetView, highlightedLinks }) {
+function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onResetView }) {
   const fgRef = useRef();
   const isTransitioning = useRef(false);
   const animationFrameRef = useRef();
@@ -83,6 +83,15 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView, highlightedLinks 
       fgRef.current.zoomToFit(400, 100);
     }
   }, [data.nodes, data.links]);
+
+  // Forzar refresco inicial para asegurar renderización de flechas
+  useEffect(() => {
+    if (fgRef.current) {
+      setTimeout(() => {
+        fgRef.current.refresh();
+      }, 100);
+    }
+  }, []);
 
   // Enfoca al nodo destacado
   useEffect(() => {
@@ -172,11 +181,16 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView, highlightedLinks 
       startTime: 0,
       currentLinkIndex: 0
     };
+    data.links.forEach(link => {
+      link.__isHighlighted = false;
+      link.__isPermanentlyHighlighted = false;
+      link.__animationProgress = 0;
+      link.__isAnimating = false;
+    });
   };
 
   // Animación mejorada de enlaces optimizada para 60fps
   useEffect(() => {
-    // Limpiar animación anterior
     cleanupAnimation();
 
     if (!fgRef.current || !highlightedLinks.length || !data.links.length) {
@@ -188,7 +202,7 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView, highlightedLinks 
       return;
     }
 
-    console.log('Iniciando animación mejorada para highlightedLinks:', highlightedLinks);
+    console.log('Iniciando animación para highlightedLinks:', highlightedLinks);
 
     // Resetear todos los enlaces
     data.links.forEach(link => {
@@ -203,11 +217,10 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView, highlightedLinks 
     const ANIMATION_DELAY = 2000; // 2 segundos entre cada enlace
     const ANIMATION_DURATION = 1000; // 1 segundo para cada animación de enlace
 
-    let currentIndex = 0;
     let lastTime = 0;
     const TARGET_FPS = 60;
     const FRAME_TIME = 1000 / TARGET_FPS; // ~16.67ms
-    
+
     const animationState = animationStateRef.current;
     animationState.isRunning = true;
     animationState.startTime = performance.now();
@@ -226,34 +239,34 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView, highlightedLinks 
       const expectedIndex = Math.floor(elapsed / ANIMATION_DELAY);
 
       // Activar nuevos enlaces si es tiempo
-      while (currentIndex <= expectedIndex && currentIndex < sortedHighlightedLinks.length) {
-        const highlight = sortedHighlightedLinks[currentIndex];
+      while (animationState.currentLinkIndex <= expectedIndex && animationState.currentLinkIndex < sortedHighlightedLinks.length) {
+        const highlight = sortedHighlightedLinks[animationState.currentLinkIndex];
         const sourceId = String(highlight.source);
         const targetId = String(highlight.target);
-        
+
         const linkObj = data.links.find(l => {
           const linkSource = l.source.id ? String(l.source.id) : String(l.source);
           const linkTarget = l.target.id ? String(l.target.id) : String(l.target);
-          return (linkSource === sourceId && linkTarget === targetId) ||
-                 (linkSource === targetId && linkTarget === sourceId);
+          return linkSource === sourceId && linkTarget === targetId ||
+               (linkSource === targetId && linkTarget === sourceId);
         });
 
         if (linkObj) {
-          console.log(`Activando enlace [${currentIndex}]: ${sourceId} -> ${targetId}`);
+          console.log(`Activando enlace [${animationState.currentLinkIndex}]: ${sourceId} -> ${targetId}`);
           linkObj.__isAnimating = true;
           linkObj.__animationStartTime = currentTime;
           linkObj.__animationProgress = 0;
         } else {
           console.warn(`Enlace no encontrado: ${sourceId} -> ${targetId}`);
         }
-        
-        currentIndex++;
+
+        animationState.currentLinkIndex++;
       }
 
-      // Actualizar progreso de animaciones activas (batch update)
+      // Actualizar progreso de animaciones activas
       let hasActiveAnimations = false;
       const linksToUpdate = [];
-      
+
       for (let i = 0; i < data.links.length; i++) {
         const link = data.links[i];
         if (link.__isAnimating) {
@@ -262,7 +275,6 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView, highlightedLinks 
           link.__animationProgress = progress;
 
           if (progress >= 1) {
-            // Animación completada
             link.__isAnimating = false;
             link.__isPermanentlyHighlighted = true;
             link.__animationProgress = 1;
@@ -273,13 +285,13 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView, highlightedLinks 
         }
       }
 
-      // Solo refrescar si hay cambios
+      // Refrescar si hay cambios
       if (linksToUpdate.length > 0 && fgRef.current) {
         fgRef.current.refresh();
       }
 
       // Continuar animando si hay enlaces activos o pendientes
-      if (hasActiveAnimations || currentIndex < sortedHighlightedLinks.length) {
+      if (hasActiveAnimations || animationState.currentLinkIndex < sortedHighlightedLinks.length) {
         animationFrameRef.current = requestAnimationFrame(animateStep);
       } else {
         console.log('Animación completada completamente');
@@ -303,62 +315,56 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView, highlightedLinks 
     };
   }, []);
 
-  // Función para obtener el color del enlace con animación suave (optimizada)
-  const getLinkColor = (link) => {
-    if (link.__isAnimating) {
-      // Durante la animación, interpolar entre blanco y verde fosforescente
-      const progress = link.__animationProgress || 0;
-      // Usar interpolación más eficiente
-      const r = Math.round(255 * (1 - progress));
-      const g = 255;
-      const b = Math.round(255 * (1 - progress));
-      return `rgb(${r},${g},${b})`;
-    } else if (link.__isPermanentlyHighlighted) {
-      return '#aaff00'; // Verde fosforescente permanente
-    }
-    return 'black'; // Blanco por defecto
-  };
-
-  // Función para obtener el ancho del enlace (optimizada)
-  const getLinkWidth = (link) => {
-    if (link.__isAnimating) {
-      const progress = link.__animationProgress || 0;
-      return 0.9 + (2.1 * progress); // De 0.9 a 3
-    } else if (link.__isPermanentlyHighlighted) {
-      return 3;
-    }
-    return 0.9;
-  };
-
-  // Función para obtener la opacidad del enlace (optimizada)
-  const getLinkOpacity = (link) => {
-    if (link.__isAnimating) {
-      const progress = link.__animationProgress || 0;
-      return 0.45 + (0.55 * progress); // De 0.45 a 1.0
-    } else if (link.__isPermanentlyHighlighted) {
-      return 1.0;
-    }
-    return 0.45;
-  };
-
-  // Render
   return (
     <ForceGraph3D
       ref={fgRef}
       graphData={data}
-      backgroundColor="black"
-      linkOpacity={getLinkOpacity}
-      linkWidth={getLinkWidth}
-      linkColor={getLinkColor}
-      linkDirectionalArrowLength={link => 
-        (link.__isPermanentlyHighlighted || link.__isAnimating) ? 10 : 5
-      }
+      backgroundColor="#111"
+      // Configuración de enlaces básicos
+      linkOpacity={0.9}
+      linkWidth={link => {
+        if (link.__isAnimating) {
+          const progress = link.__animationProgress || 0;
+          return 0.8 + (1.2 * progress); // De 0.8 a 2
+        } else if (link.__isPermanentlyHighlighted) {
+          return 2;
+        }
+        return 0.8;
+      }}
+      linkColor={link => {
+        if (link.__isAnimating) {
+          const progress = link.__animationProgress || 0;
+          const r = Math.round(255 * (1 - progress) + 170 * progress); // 255 -> 170 (rojo de #aaff00)
+          const g = 255; // Verde constante
+          const b = Math.round(255 * (1 - progress)); // 255 -> 0 (azul de #aaff00)
+          return `rgb(${r},${g},${b})`;
+        } else if (link.__isPermanentlyHighlighted) {
+          return '#aaff00'; // Verde fosforescente permanente
+        }
+        return '#FFFFFF'; // Blanco por defecto
+      }}
+      // Configuración de flechas - USANDO VALORES FIJOS COMO EN EL CÓDIGO QUE FUNCIONA
+      linkDirectionalArrowLength={5}
       linkDirectionalArrowRelPos={1}
-      linkDirectionalArrowColor={getLinkColor}
-      linkDirectionalArrowResolution={16}
+      linkDirectionalArrowColor={link => {
+        if (link.__isAnimating) {
+          const progress = link.__animationProgress || 0;
+          const r = Math.round(255 * (1 - progress) + 170 * progress); // 255 -> 170 (rojo de #aaff00)
+          const g = 255; // Verde constante
+          const b = Math.round(255 * (1 - progress)); // 255 -> 0 (azul de #aaff00)
+          return `rgb(${r},${g},${b})`;
+        } else if (link.__isPermanentlyHighlighted) {
+          return '#aaff00'; // Verde fosforescente permanente
+        }
+        return '#FFFFFF'; // Blanco por defecto
+      }}
+      linkDirectionalArrowResolution={8}
+      // Configuración de física
       d3VelocityDecay={0.3}
       warmupTicks={100}
+      // Event handlers
       onNodeClick={n => onNodeInfo?.(n)}
+      // Renderizado de nodos
       nodeThreeObject={node => {
         const group = new THREE.Group();
         const R = 6;
@@ -393,4 +399,4 @@ function Graph3D({ data, onNodeInfo, highlightId, onResetView, highlightedLinks 
   );
 }
 
-export default memo(Graph3D); 
+export default memo(Graph3D);
