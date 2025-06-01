@@ -263,18 +263,11 @@ function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onReset
         1500
       );
 
-      node.__flashUntil = Date.now() + 9000;
-      throttledRefresh();
-
-      setTimeout(() => {
-        node.__flashUntil = 0;
-        throttledRefresh();
-        isTransitioning.current = false;
-      }, 9000);
+      isTransitioning.current = false;
     };
 
     setTimeout(focusNode, 100);
-  }, [highlightId, filteredData.nodes, throttledRefresh]);
+  }, [highlightId, filteredData.nodes]);
 
   // Resetea la vista
   useEffect(() => {
@@ -552,9 +545,7 @@ function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onReset
       nodeThreeObject={node => {
         const group = new THREE.Group();
 
-        const color = Date.now() < (node.__flashUntil || 0)
-          ? '#8a411d'
-          : getNodeColor(node).texture;
+        const color = getNodeColor(node).texture;
 
         const material = new THREE.MeshBasicMaterial({
           map: color instanceof THREE.Texture ? color : null,
