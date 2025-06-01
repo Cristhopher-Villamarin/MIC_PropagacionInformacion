@@ -266,9 +266,16 @@ export default function App() {
         modalNode={modalNode}
         propagationLog={propagationLog}
       />
+   // In App.jsx, replace the PropagationResult component call with:
+        // En App.jsx, reemplazar la llamada a PropagationResult con:
       <PropagationResult
-        result={propagationResult}
-        onClose={() => setPropagationResult(null)}
+        propagationLog={propagationLog}
+        selectedUser={selectedUser}
+        onClose={() => {
+          setPropagationResult(null);
+          setPropagationLog([]);
+          setHighlightedLinks([]);
+        }}
       />
       <div className="graph-container">
         <Graph3D
