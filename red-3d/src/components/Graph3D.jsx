@@ -43,7 +43,7 @@ function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onReset
         ANIMATION_DELAY: 4000, // Más lento para ver la secuencia
         ANIMATION_DURATION: 4000,
         BATCH_SIZE: 1, // Un enlace a la vez
-        VISIBILITY_DURATION: 800,
+        VISIBILITY_DURATION: 4000,
         REFRESH_THROTTLE: 50 // Throttle más agresivo
       };
     } else if (isLargePropagation) {
@@ -52,15 +52,15 @@ function Graph3D({ data, onNodeInfo, highlightId, highlightedLinks = [], onReset
         ANIMATION_DURATION: 4000,
         BATCH_SIZE: 1,
         VISIBILITY_DURATION: 4000,
-        REFRESH_THROTTLE: 33
+        REFRESH_THROTTLE: 50
       };
     } else {
       return {
         ANIMATION_DELAY: 4000, // Más lento para propagaciones pequeñas
-        ANIMATION_DURATION: 4200,
+        ANIMATION_DURATION: 4000,
         BATCH_SIZE: 1,
-        VISIBILITY_DURATION: 4500,
-        REFRESH_THROTTLE: 16
+        VISIBILITY_DURATION: 4000,
+        REFRESH_THROTTLE: 50
       };
     }
   }, [isExtensivePropagation, isLargePropagation]);
